@@ -3,18 +3,20 @@ let displayMode = 0;
 
 let lastSignalStrength = 0;
 let transmitPower = 0;
-let radioSignalReceived = false;
+let packetPulse = false;
 
 radio.setGroup(1);
 
 basic.forever(() => {
-    radio.sendNumber(0);
+    radio.sendNumber(1);
     game.pause();
     return fns[displayMode]();
 });
 
 input.onButtonPressed(Button.A, () => {
     displayMode = (displayMode + 1) % fns.length;
+    for (let i = 0; i < 5; i++)
+        for (let j = 0; j < 5; j++) led.plotBrightness(i, j, 0);
 });
 
 input.onButtonPressed(Button.B, () => {
@@ -22,25 +24,28 @@ input.onButtonPressed(Button.B, () => {
     radio.setTransmitPower(transmitPower);
     basic.showNumber(transmitPower);
     basic.pause(100);
-    // sel = fns.length - 1;
 });
 
-radio.onDataPacketReceived(({ signal }) => {
-    lastSignalStrength = signal;
-    radioSignalReceived = true;
+radio.onDataPacketReceived(({ receivedNumber, signal }) => {
+    if (receivedNumber == 0) {
+        lastSignalStrength = signal;
+        packetPulse = true;
+    }
 });
 
-let cylon = 0;
+let pulseTicker = 0;
 let row = [0, 0, 0, 0, 0];
 
 function showRadioState() {
-    // basic.showNumber(lastSignalStrength);
-    if (!radioSignalReceived) {
+    if (!packetPulse) {
+        fadeTrail();
+        renderTrail();
         return;
     }
-    cylon += 1;
+    packetPulse = false;
+    pulseTicker += 1;
     row.forEach((_, i) => {
-        led.plotBrightness(i, 0, i === cylon % 5 ? 20 : 0);
+        led.plotBrightness(i, 0, i === pulseTicker % 5 ? 20 : 0);
     });
     let val = Math.floor((20 * (-lastSignalStrength - 42)) / (128 - 42));
     addToTrail(val % 5, 1 + Math.floor(val / 5));
@@ -59,10 +64,14 @@ function showTransmitPower() {
 let trail = [[0, 0, 0]];
 
 function addToTrail(i: number, j: number) {
+    fadeTrail();
+    trail.push([i, j, 255]);
+}
+
+function fadeTrail() {
     trail.forEach(r => {
         r[2] = Math.max(0, r[2] - 10);
     });
-    trail.push([i, j, 255]);
 }
 
 function renderTrail() {
