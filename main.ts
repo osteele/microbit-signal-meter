@@ -1,22 +1,26 @@
-let fns = [showRadioState, showSignalStrength, showTransmitPower];
+const fns = [showRadioState, showSignalStrength, showTransmitPower];
 let displayMode = 0;
 
 let lastSignalStrength = 0;
 let transmitPower = 0;
 let packetPulse = false;
 
+const nearThreshold = -76; // higher RSS than this turns it on; was -76
+const farThreshold = -(76 + 3 * 4); // lower RSS than this turns it off
+const farThresholdDelay = 500;
+let isNear = false;
+let firstFarTime = 0;
+
 radio.setGroup(1);
 
 basic.forever(() => {
     radio.sendNumber(1);
-    game.pause();
     return fns[displayMode]();
 });
 
 input.onButtonPressed(Button.A, () => {
     displayMode = (displayMode + 1) % fns.length;
-    for (let i = 0; i < 5; i++)
-        for (let j = 0; j < 5; j++) led.plotBrightness(i, j, 0);
+    ledClear();
 });
 
 input.onButtonPressed(Button.B, () => {
@@ -34,7 +38,6 @@ radio.onDataPacketReceived(({ receivedNumber, signal }) => {
 });
 
 let pulseTicker = 0;
-let row = [0, 0, 0, 0, 0];
 
 function showRadioState() {
     if (!packetPulse) {
@@ -42,11 +45,27 @@ function showRadioState() {
         renderTrail();
         return;
     }
+
     packetPulse = false;
     pulseTicker += 1;
-    row.forEach((_, i) => {
-        led.plotBrightness(i, 0, i === pulseTicker % 5 ? 20 : 0);
-    });
+    for (let i = 0; i < 4; i++) {
+        // led.plotBrightness(i, 0, i === pulseTicker % 4 ? 10 : 0);
+    }
+
+    const currentTime = input.runningTime();
+    if (lastSignalStrength > nearThreshold) {
+        isNear = true;
+        firstFarTime = 0;
+    }
+    if (lastSignalStrength < farThreshold) {
+        if (!firstFarTime) {
+            firstFarTime = currentTime;
+        } else if (currentTime - firstFarTime > farThresholdDelay) {
+            isNear = false;
+        }
+    }
+    led.plotBrightness(2, 0, isNear ? 128 : 0);
+
     let val = Math.floor((20 * (-lastSignalStrength - 42)) / (128 - 42));
     addToTrail(val % 5, 1 + Math.floor(val / 5));
     renderTrail();
@@ -82,4 +101,12 @@ function renderTrail() {
         led.plotBrightness(i, j, b);
     });
     trail = trail.filter(r => r[2] > 0);
+}
+
+function ledClear() {
+    for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            led.plotBrightness(i, j, 0);
+        }
+    }
 }
