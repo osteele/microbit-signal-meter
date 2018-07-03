@@ -1,7 +1,7 @@
 const RSS_MAX = -42;
 const RSS_MIN = -128;
-let txValue = 0;
-let rxValue = 2;
+let txValue = 1;
+let rxValue = 0;
 
 // Button A cycles through these
 const DISPLAY_MODES = [
@@ -50,9 +50,20 @@ input.onButtonPressed(Button.B, () => {
     }
 });
 
+let simulator = false;
 radio.onDataPacketReceived(({ receivedNumber, signal }) => {
     if (rxValue == 2 || receivedNumber == rxValue) {
         signalStrength = signal;
+        if (signal == -10) {
+            simulator = true;
+            signalStrength = RSS_MAX;
+        }
+        if (simulator) {
+            signalStrength -= 2;
+            if (signalStrength < RSS_MIN) {
+                signalStrength = RSS_MAX;
+            }
+        }
         packetPulse = true;
     }
 });
@@ -62,14 +73,26 @@ function cycleTransmitPower() {
     radio.setTransmitPower(transmitPower);
 }
 
-// Display modes
+// Strength trace display mode
+
+const RSS_XFORMS: ((_: number) => number)[] = [
+    n => n,
+    n => -Math.sqrt(norm1(n)),
+    n => -Math.sqrt(norm2(n)),
+    n => -(norm1(n) ** 2),
+    n => -(norm2(n) ** 2)
+];
+const norm1 = (n: number) => n - RSS_MIN;
+const norm2 = (n: number) => RSS_MAX - n;
+let rssXformIndex = 0;
 
 let pulseTicker = 0;
 
 function showRadioState() {
     buttonBAction = () => {
-        pause(3000, ledClear);
-        basic.showNumber(-signalStrength);
+        rssXformIndex = (rssXformIndex + 1) % RSS_XFORMS.length;
+        pause(1000, ledClear);
+        basic.showNumber(rssXformIndex);
     };
     if (!packetPulse) {
         fadeTrail();
@@ -81,12 +104,16 @@ function showRadioState() {
     for (let i = 0; i < 5; i++) {
         led.plotBrightness(i, 0, i === pulseTicker % 5 ? 20 : 0);
     }
+
+    const f = RSS_XFORMS[rssXformIndex];
     const val = Math.floor(
-        (20 * (signalStrength - RSS_MAX)) / (RSS_MIN - RSS_MAX)
+        (20 * (f(signalStrength) - f(RSS_MAX))) / (f(RSS_MIN) - f(RSS_MAX))
     );
     addToTrail(val % 5, 1 + Math.floor(val / 5));
     renderTrail();
 }
+
+// Other display modes
 
 function showSignalStrength() {
     basic.showNumber(-signalStrength);
