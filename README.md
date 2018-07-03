@@ -13,14 +13,23 @@ The left button cycles between display modes:
   The last few samples are faded; this makes it easier to eyeball a trace of the
   signal strength history.
 
+  In this mode, button B briefly displays the last received packet signal
+  strength.
+
 * The absolute value of the last received packet signal strength. The absolute
   value is used because the number is scrolled across the display, and the
   negative sign makes this take even longer.
 
+* Transmission value (0 or 1), and receive value (0, 1, *). When the receive
+  value is 0 or 1, the meter only attends to signals that match this value.
+
+  In this mode, button B cycles among the values.
+
 * Current radio transmission power.
 
-The right button cycles between radio transmission power, from 0 to 7 and back
-to zero again.
+  In this mode, button B cycles the radio transmission power from 0 to 7 and
+  back to zero again.
+
 
 Developed at [Dinacon 2018](https://www.dinacon.org).
 

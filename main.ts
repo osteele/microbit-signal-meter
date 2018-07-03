@@ -1,39 +1,76 @@
-const displayModes = [showRadioState, showSignalStrength, showTransmitPower];
-let displayMode = 0;
+const RSS_MAX = -42;
+const RSS_MIN = -128;
+let txValue = 0;
+let rxValue = 2;
 
-let signalStrength = 0;
+// Button A cycles through these
+const DISPLAY_MODES = [
+    showRadioState,
+    showSignalStrength,
+    showTransmitPower,
+    showSendReceiveValues
+];
+let displayMode = 0;
+let pauseUntil = 0;
+let afterPause: () => void;
+
+let buttonBAction: () => void = null;
+
+let signalStrength = 0; // the signal strength of the last received packet
 let transmitPower = 0;
-let packetPulse = false;
+let packetPulse = false; // onDataPacketReceived sets this; consumer should clear it
 
 radio.setGroup(1);
 
 basic.forever(() => {
-    radio.sendNumber(1);
-    displayModes[displayMode]();
+    radio.sendNumber(txValue);
+    if (input.runningTime() < pauseUntil) {
+        return;
+    } else if (afterPause) {
+        afterPause();
+        afterPause = null;
+    }
+    DISPLAY_MODES[displayMode]();
 });
 
+function pause(ms: number, callback: () => void) {
+    pauseUntil = input.runningTime() + ms;
+    afterPause = callback;
+}
+
 input.onButtonPressed(Button.A, () => {
-    displayMode = (displayMode + 1) % displayModes.length;
+    displayMode = (displayMode + 1) % DISPLAY_MODES.length;
+    buttonBAction = null;
     ledClear();
 });
 
 input.onButtonPressed(Button.B, () => {
-    transmitPower = (transmitPower + 1) % 8;
-    radio.setTransmitPower(transmitPower);
-    basic.showNumber(transmitPower);
-    basic.pause(100);
+    if (buttonBAction) {
+        buttonBAction();
+    }
 });
 
 radio.onDataPacketReceived(({ receivedNumber, signal }) => {
-    if (receivedNumber == 0) {
+    if (rxValue == 2 || receivedNumber == rxValue) {
         signalStrength = signal;
         packetPulse = true;
     }
 });
 
+function cycleTransmitPower() {
+    transmitPower = (transmitPower + 1) % 8;
+    radio.setTransmitPower(transmitPower);
+}
+
+// Display modes
+
 let pulseTicker = 0;
 
 function showRadioState() {
+    buttonBAction = () => {
+        pause(3000, ledClear);
+        basic.showNumber(-signalStrength);
+    };
     if (!packetPulse) {
         fadeTrail();
         renderTrail();
@@ -44,25 +81,39 @@ function showRadioState() {
     for (let i = 0; i < 5; i++) {
         led.plotBrightness(i, 0, i === pulseTicker % 5 ? 20 : 0);
     }
-    const val = Math.floor((20 * (-signalStrength - 42)) / (128 - 42));
+    const val = Math.floor(
+        (20 * (signalStrength - RSS_MAX)) / (RSS_MIN - RSS_MAX)
+    );
     addToTrail(val % 5, 1 + Math.floor(val / 5));
     renderTrail();
 }
 
 function showSignalStrength() {
     basic.showNumber(-signalStrength);
-    // basic.showNumber(Math.floor(lastSignalStrength / 10) % 1);
+}
+
+function showSendReceiveValues() {
+    buttonBAction = () => {
+        const plex = 3 * txValue + rxValue + 1;
+        txValue = Math.floor(plex / 3) % 2;
+        rxValue = plex % 3;
+    };
+    const rxString: string = rxValue == 2 ? '*' : rxValue.toString();
+    basic.showString('T' + txValue + 'R' + rxString);
 }
 
 function showTransmitPower() {
-    basic.showNumber(transmitPower);
+    buttonBAction = cycleTransmitPower;
+    basic.showString('P' + transmitPower);
 }
 
-let trail = [[0, 0, 0]];
+// Display utilities
 
-function addToTrail(i: number, j: number) {
+let trail: (number[])[] = [];
+
+function addToTrail(x: number, y: number) {
     fadeTrail();
-    trail.push([i, j, 255]);
+    trail.push([x, y, 255]);
 }
 
 function fadeTrail() {
