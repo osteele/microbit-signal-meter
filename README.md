@@ -3,6 +3,8 @@
 A radio signal strength (RSS) meter for the [BBC
 micro:bit](http://microbit.org/).
 
+<img src="./docs/rss.gif" width="320" >
+
 Run this on a couple of micro:bits, to measure their radio signal strength at
 different radio transmission powers and distances.
 
